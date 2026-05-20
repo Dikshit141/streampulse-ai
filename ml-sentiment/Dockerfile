@@ -9,12 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ── Pre-download model at BUILD time ─────────────────────────
-# So HuggingFace Spaces / Render never cold-downloads at request time.
-# Model is ~260MB — acceptable for a portfolio container.
-COPY download_model.py .
-RUN python download_model.py
-
+# Copy app source
 COPY . .
 
 EXPOSE 8002
