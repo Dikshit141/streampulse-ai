@@ -1,0 +1,208 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────
+#  StreamPulse AI — Local Dev Stack
+#  Run: docker compose up --build
+#  Dashboard: http://localhost:5173
+#  Gateway:   http://localhost:4000
+#  Drop ML:   http://localhost:8001
+#  Sentiment: http://localhost:8002
+#  Grafana:   http://localhost:3001  (admin/admin)
+#  Prometheus:http://localhost:9090
+# ─────────────────────────────────────────────────────────────
+
+networks:
+  streampulse:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  grafana_data:
+  prometheus_data:
+
+services:
+  # ── Infrastructure ──────────────────────────────────────────
+
+  redis:
+    image: redis:7-alpine
+    container_name: sp_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    networks:
+      - streampulse
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: sp_postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-streampulse}
+      POSTGRES_USER: ${POSTGRES_USER:-spuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sppassword}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - streampulse
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-spuser} -d ${POSTGRES_DB:-streampulse}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Node.js Event Gateway ────────────────────────────────────
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: sp_gateway
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${POSTGRES_USER:-spuser}:${POSTGRES_PASSWORD:-sppassword}@postgres:5432/${POSTGRES_DB:-streampulse}
+      JWT_SECRET: ${JWT_SECRET:-local_dev_secret_change_in_prod}
+      ML_DROP_URL: http://ml-drop:8001
+      ML_SENTIMENT_URL: http://ml-sentiment:8002
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./gateway/src:/app/src   # hot reload in dev
+    networks:
+      - streampulse
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Python ML: Drop Prediction ───────────────────────────────
+
+  ml-drop:
+    build:
+      context: ./ml-drop-prediction
+      dockerfile: Dockerfile
+    container_name: sp_ml_drop
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      PORT: 8001
+      WORKERS: 1
+    networks:
+      - streampulse
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8001/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s   # model training at startup needs time
+
+  # ── Python ML: Sentiment Analysis ───────────────────────────
+
+  ml-sentiment:
+    build:
+      context: ./ml-sentiment
+      dockerfile: Dockerfile
+    container_name: sp_ml_sentiment
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    environment:
+      PORT: 8002
+      WORKERS: 1
+      # Model is baked into the image at build time
+      TRANSFORMERS_CACHE: /app/model_cache
+    volumes:
+      - ./ml-sentiment/model_cache:/app/model_cache  # persist downloaded model
+    networks:
+      - streampulse
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8002/health || exit 1"]
+      interval: 20s
+      timeout: 15s
+      retries: 5
+      start_period: 60s   # DistilBERT load time
+
+  # ── React Dashboard (dev server) ─────────────────────────────
+
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile.dev
+    container_name: sp_dashboard
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_GATEWAY_URL: http://localhost:4000
+      VITE_ML_DROP_URL: http://localhost:8001
+      VITE_ML_SENTIMENT_URL: http://localhost:8002
+    volumes:
+      - ./dashboard/src:/app/src   # hot reload
+    depends_on:
+      - gateway
+    networks:
+      - streampulse
+
+  # ── Monitoring: Prometheus ───────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: sp_prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--storage.tsdb.retention.time=7d"
+    networks:
+      - streampulse
+
+  # ── Monitoring: Grafana ──────────────────────────────────────
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: sp_grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: ""
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - streampulse

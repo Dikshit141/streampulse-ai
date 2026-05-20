@@ -1,0 +1,73 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [
+          { "color": "green", "value": null },
+          { "color": "yellow", "value": 5000 },
+          { "color": "red", "value": 10000 }
+        ]}, "unit": "short" }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "title": "Concurrent Viewers",
+      "type": "stat",
+      "targets": [{ "expr": "streampulse_concurrent_viewers", "legendFormat": "Viewers" }]
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 8, "w": 12, "x": 4, "y": 0 },
+      "id": 2,
+      "options": { "tooltip": { "mode": "single" } },
+      "title": "Events per Second",
+      "type": "timeseries",
+      "targets": [{ "expr": "rate(streampulse_events_total[1m])", "legendFormat": "{{event_type}}" }]
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 } },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 4 },
+      "id": 3,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "Buffering Rate",
+      "type": "stat",
+      "targets": [{ "expr": "streampulse_buffering_rate", "legendFormat": "Buffer" }]
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1,
+        "thresholds": { "steps": [
+          { "color": "green", "value": null },
+          { "color": "yellow", "value": 0.5 },
+          { "color": "red", "value": 0.75 }
+        ]}
+      }},
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "id": 4,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "Drop Risk",
+      "type": "stat",
+      "targets": [{ "expr": "streampulse_drop_probability", "legendFormat": "Risk" }]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "tags": ["streampulse"],
+  "time": { "from": "now-15m", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "StreamPulse AI — Live Overview",
+  "uid": "streampulse-overview",
+  "version": 1
+}

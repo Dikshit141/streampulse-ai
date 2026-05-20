@@ -1,0 +1,50 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+*.egg
+
+# ML model cache (large binary — don't commit)
+ml-sentiment/model_cache/
+ml-drop-prediction/model_cache/
+
+# React build output
+dashboard/dist/
+dashboard/.vite/
+
+# Docker volumes (local dev data)
+.docker/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# Coverage
+coverage/
+.nyc_output/
