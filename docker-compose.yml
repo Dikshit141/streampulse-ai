@@ -159,7 +159,8 @@ services:
       VITE_ML_DROP_URL: http://localhost:8001
       VITE_ML_SENTIMENT_URL: http://localhost:8002
     volumes:
-      - ./dashboard/src:/app/src   # hot reload
+      - ./dashboard/src:/app/src
+      - /app/node_modules
     depends_on:
       - gateway
     networks:

@@ -46,8 +46,7 @@ def load_model():
     pipe = hf_pipeline(
         "sentiment-analysis",
         model=MODEL_NAME,
-        cache_dir=CACHE_DIR,
-        device=-1,          # CPU only
+        device=-1,
         truncation=True,
         max_length=512,
     )
